@@ -1,9 +1,8 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Send, Smile, LogOut, Users, User } from 'lucide-react';
+import { Send, Smile, LogOut, Users, User, Reply } from 'lucide-react';
 import EmojiPicker from './EmojiPicker';
 
 interface Message {
@@ -35,6 +34,13 @@ interface ChatInterfaceProps {
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, onLogout }) => {
   const [contacts, setContacts] = useState<Contact[]>([
     {
+      id: 'me',
+      username: user.username,
+      email: user.email,
+      lastSeen: new Date(),
+      isOnline: true
+    },
+    {
       id: '1',
       username: 'John Doe',
       email: 'john@example.com',
@@ -59,6 +65,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, onLogout }) => {
 
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [messages, setMessages] = useState<{[key: string]: Message[]}>({
+    'me': [],
     '1': [
       {
         id: '1',
@@ -82,6 +89,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, onLogout }) => {
 
   const [newMessage, setNewMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [replyMode, setReplyMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -100,24 +108,41 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, onLogout }) => {
     const message: Message = {
       id: Date.now().toString(),
       text: newMessage,
-      sender: user.username,
+      sender: replyMode ? selectedContact.username : user.username,
       timestamp: new Date(),
-      isOwn: true
+      isOwn: !replyMode
     };
 
+    // If replying as contact, send to current user's chat
+    const targetContactId = replyMode ? 'me' : selectedContact.id;
+    
     setMessages(prev => ({
       ...prev,
-      [selectedContact.id]: [...(prev[selectedContact.id] || []), message]
+      [targetContactId]: [...(prev[targetContactId] || []), message]
     }));
     
     setNewMessage('');
     setShowEmojiPicker(false);
+    
+    // If we sent a reply as contact, switch back to viewing our own messages
+    if (replyMode) {
+      setReplyMode(false);
+      const meContact = contacts.find(c => c.id === 'me');
+      if (meContact) {
+        setSelectedContact(meContact);
+      }
+    }
   };
 
   const handleEmojiSelect = (emoji: string) => {
     setNewMessage(prev => prev + emoji);
     setShowEmojiPicker(false);
     inputRef.current?.focus();
+  };
+
+  const toggleReplyMode = () => {
+    setReplyMode(!replyMode);
+    setNewMessage('');
   };
 
   const formatTime = (date: Date) => {
@@ -177,7 +202,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, onLogout }) => {
                 }`}
               >
                 <div className="relative">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-400 to-pink-400 flex items-center justify-center">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    contact.id === 'me' 
+                      ? 'bg-gradient-to-r from-blue-400 to-cyan-400' 
+                      : 'bg-gradient-to-r from-purple-400 to-pink-400'
+                  }`}>
                     <User className="w-5 h-5 text-white" />
                   </div>
                   {contact.isOnline && (
@@ -186,7 +215,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, onLogout }) => {
                 </div>
                 <div className="ml-3 flex-1">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-medium text-sm">{contact.username}</h3>
+                    <h3 className="font-medium text-sm">
+                      {contact.id === 'me' ? `${contact.username} (You)` : contact.username}
+                    </h3>
                     <span className="text-xs text-muted-foreground">
                       {contact.isOnline ? 'online' : formatLastSeen(contact.lastSeen)}
                     </span>
@@ -210,21 +241,42 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, onLogout }) => {
           <>
             {/* Chat Header */}
             <div className="glass-effect border-b border-white/10 p-4">
-              <div className="flex items-center space-x-3">
-                <div className="relative">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-400 to-pink-400 flex items-center justify-center">
-                    <User className="w-4 h-4 text-white" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="relative">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      selectedContact.id === 'me' 
+                        ? 'bg-gradient-to-r from-blue-400 to-cyan-400' 
+                        : 'bg-gradient-to-r from-purple-400 to-pink-400'
+                    }`}>
+                      <User className="w-4 h-4 text-white" />
+                    </div>
+                    {selectedContact.isOnline && (
+                      <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-slate-900"></div>
+                    )}
                   </div>
-                  {selectedContact.isOnline && (
-                    <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-slate-900"></div>
-                  )}
+                  <div>
+                    <h2 className="font-medium">
+                      {selectedContact.id === 'me' ? `${selectedContact.username} (You)` : selectedContact.username}
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedContact.isOnline ? 'online' : `last seen ${formatLastSeen(selectedContact.lastSeen)}`}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="font-medium">{selectedContact.username}</h2>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedContact.isOnline ? 'online' : `last seen ${formatLastSeen(selectedContact.lastSeen)}`}
-                  </p>
-                </div>
+                
+                {/* Reply Mode Toggle - only show for other contacts */}
+                {selectedContact.id !== 'me' && (
+                  <Button
+                    onClick={toggleReplyMode}
+                    variant={replyMode ? "default" : "ghost"}
+                    size="sm"
+                    className={`${replyMode ? 'bg-purple-600 hover:bg-purple-700' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    <Reply className="w-4 h-4 mr-1" />
+                    {replyMode ? 'Reply Mode On' : 'Reply as Contact'}
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -253,12 +305,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, onLogout }) => {
 
             {/* Message Input */}
             <div className="glass-effect border-t border-white/10 p-4">
+              {replyMode && (
+                <div className="mb-2 p-2 bg-purple-500/20 rounded-lg text-sm text-purple-200">
+                  <Reply className="w-4 h-4 inline mr-1" />
+                  Replying as {selectedContact.username}
+                </div>
+              )}
               <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
                 <div className="relative flex-1">
                   <Input
                     ref={inputRef}
                     type="text"
-                    placeholder={`Message ${selectedContact.username}...`}
+                    placeholder={replyMode 
+                      ? `Reply as ${selectedContact.username}...` 
+                      : `Message ${selectedContact.id === 'me' ? 'yourself' : selectedContact.username}...`
+                    }
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     className="glass-effect border-white/20 focus:border-purple-400 pr-12"
